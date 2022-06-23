@@ -1,0 +1,2 @@
+export PROMPT_COMMAND='{ date "+[ %Y%m%d %H:%M:%S `whoami` `tty`] `history 1 | { read x cmd; echo "$cmd"; }`"; } \
+    >> /var/log/cmd_history'
