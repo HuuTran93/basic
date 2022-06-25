@@ -1,0 +1,110 @@
+[root@Gondor-UAT-AMS001 conf.d]# cat courier.conf
+vrrp_script chk_courier_F {
+       script "/etc/keepalived/check_script.sh  courier FAULT"
+       rise 2
+       interval 5
+}
+
+vrrp_script chk_courier_B {
+        script "/etc/keepalived/check_script.sh  courier  BACKUP"
+        interval 5
+        rise 2
+        weight  1
+}
+vrrp_instance VI_courier {
+    state  BACKUP
+    interface eth0
+    virtual_router_id 25
+    advert_int 5
+    priority  101
+    unicast_src_ip 10.0.0.6
+
+    unicast_peer {
+
+        10.0.0.7
+
+    }
+    authentication {
+        auth_type PASS
+        auth_pass 1111
+    }
+
+     track_script {
+        chk_courier_B
+        chk_courier_F
+        }
+
+
+    notify_master "/etc/keepalived/notify.sh courier  MASTER"
+    notify_backup "/etc/keepalived/notify.sh courier  BACKUP"
+    notify_fault  "/etc/keepalived/notify.sh courier FAULT"
+}
+
+------------------------
+
+[root@Gondor-UAT-AMS001 keepalived]# cat check_script.sh
+#!/bin/bash
+SERVICE=$1
+# MODE check service in BACKUP OR FAULT STATE
+MODE=$2
+COUNTER_FILE="/etc/keepalived/COUNTER"
+LAST_SEEN="/etc/keepalived/LAST_SEEN_${SERVICE}"
+OLD_STATE=$(cat ${COUNTER_FILE} | sed -nr "s/[A-Z]+-->([A-Z]+)\|${SERVICE} .*$/\1/p" | tail -n 1 )
+function check_process() {
+        #PROCESS=$( ps -ef  | grep -v "grep\|check_script\|notify" | grep nginx)
+        PROCESS=$(ps -aux  | sed -nr "s/^.*java.*DAPP_NAME="${SERVICE}"\s.*/OK/p")
+        if [[ -n ${PROCESS} ]]; then
+                echo ${PROCESS} >> /tmp/test
+                echo $(date  +%s) > ${LAST_SEEN}
+                return 0
+        fi
+        return 1
+}
+
+function check_fault() {
+        STOP_TIME=$(cat ${LAST_SEEN} )
+        if [ -z ${STOP_TIME} ]; then
+                last_stop=0
+        else
+                last_stop=${STOP_TIME}
+        fi
+        now_timestamp=$(date +%s)
+        diff_time=$(( now_timestamp - last_stop ))
+        if [[ ${diff_time} -ge 120 ]] ; then
+                return 0
+        else
+                return 1
+        fi
+}
+
+if [[ ${MODE} == "BACKUP" ]]; then
+        check_process
+        exit $?
+elif  [[ ${MODE} == "FAULT" ]]; then
+        check_process
+        rtn_process=$?
+        check_fault
+        rtn_fault=$?
+        if [[ ${rtn_process}  -eq 0 ]] ; then
+#                exit 0
+              exit ${rtn_process}
+        else
+                if [[ ${OLD_STATE} == "MASTER" ]] && [[ ${rtn_fault} -ne 0 ]] ; then
+#                          exit 1
+                       exit ${rtn_process}
+                fi
+                exit ${rtn_fault}
+        fi
+else
+        echo "Unknown variable"
+        exit 1
+fi
+--------------------------------------
+
+[root@Gondor-UAT-AMS001 keepalived]# cat keepalived.conf
+global_defs {
+   enable_script_security
+  script_user root
+}
+include /etc/keepalived/conf.d/*.conf
+-------------------------------
