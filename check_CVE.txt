@@ -1,4 +1,62 @@
 #!/bin/bash
+DATE=`date "+%Y%m%d"`
+DATE2=`date -d '-7 day' '+%Y%m%d'`
+#SOURCE="/opt/trs_check_cve/$DATE/"
+#SOURCE2="/opt/trs_check_cve/$DATE2/"
+RESULT="/opt/trs_check_cve/$DATE.txt"
+#LIST_CVE=`ls /opt/trs_check_cve/$DATE/`
+mkdir /opt/trs_check_cve/$DATE/ -p
+SOURCE="/opt/trs_check_cve/$DATE/"
+SOURCE2="/opt/trs_check_cve/$DATE2/"
+#LIST_CVE=`ls $SOURCE`
+cat /dev/null > $RESULT
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=MySQL | grep -i "name=CVE" >  $SOURCE/Mysql.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=jdk | grep -i "name=CVE" >  $SOURCE/jdk.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=redis | grep -i "name=CVE" >  $SOURCE/redis.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=ActiveMQ | grep -i "name=CVE" >  $SOURCE/ActiveMQ.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=nginx | grep -i "name=CVE" >  $SOURCE/nginx.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=Postfix | grep -i "name=CVE" >  $SOURCE/Postfix.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=tomcat | grep -i "name=CVE" >  $SOURCE/tomcat.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=Apache | grep -i "name=CVE" >  $SOURCE/apache.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=ntpd | grep -i "name=CVE" >  $SOURCE/ntpd.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=keepalive | grep -i "name=CVE" >  $SOURCE/keepalive.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=nfs | grep -i "name=CVE" >  $SOURCE/nfs.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=memcached | grep -i "name=CVE" >  $SOURCE/memcached.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=repcached | grep -i "name=CVE" >  $SOURCE/Repcached.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=quartz | grep -i "name=CVE" >  $SOURCE/quartz.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=jetty | grep -i "name=CVE" >  $SOURCE/jetty.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=heartbeat | grep -i "name=CVE" >  $SOURCE/heartbeat.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=struts | grep -i "name=CVE" >  $SOURCE/struts.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=Spring+mvc | grep -i "name=CVE" >  $SOURCE/Spring_mvc.txt
+LIST_CVE=`ls $SOURCE`
+#for x in $LIST_CVE/*
+for x in $LIST_CVE;
+do
+echo "Check CVE $x" >> $RESULT;
+cat $SOURCE/$x | wc -l >> $RESULT;
+#DIFF=`diff  $SOURCE/$x $SOURCE2/$x`
+#diff  $SOURCE/$x $SOURCE2/$x | grep -v "d0" >> $RESULT;
+DIFF=`diff  $SOURCE/$x $SOURCE2/$x  | awk '{print $5}' | awk -F '=' '{print $3}' | awk -F '"' '{print $1}'`
+$DIFF >> $RESULT;
+DIFF2=`diff  $SOURCE/$x $SOURCE2/$x`
+if [[ -z $DIFF2 ]];
+#if [ $SOURCE/$x != $SOURCE2/$x ];
+ then
+echo "CVE for $x Is OK"
+else
+send_hipchat=`echo "<!here> [WARNING][TRS] PLEASE CHECK CVE WEEKLY FOR  $x ON TRS NOW \n  $DIFF" | /opt/trs_check_cve/send_message_slack.sh -c red -l https://hooks.slack.com/services/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`
+#send_hipchat=`echo "[WARNING][TRS] PLEASE CHECK CVE FOR  $x ON TRS NOW" | /opt/trs_check_cve/send_message_slack.sh -c red -l https://hooks.slack.com/services/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`
+#echo `WARNING: PLEASE CHECK CVE FOR  $x ON TRS NOW | /opt/trs_check_cve/send_message_slack.sh -c red -l https://hooks.slack.com/services/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`
+fi;
+done;
+send_hipchat=`echo "`cat $RESULT`" | /opt/trs_check_cve/send_message_slack.sh -c red -l https://hooks.slack.com/services/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`
+exit
+
+
+
+
+===============
+#!/bin/bash
 
 DAY=`date +%u`
 DATE=`date "+%Y%m%d"`
