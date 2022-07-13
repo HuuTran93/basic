@@ -1,0 +1,57 @@
+[root@etcd4 20220711]# cat /opt/trs_check_cve/send_message_slack.sh
+#!/bin/bash
+
+set -e
+set -u
+
+usage() {
+   cat << EOF
+Usage: $0 -m <message> -l <linkrooom> -c <color>
+This script will read from stdin and send the contents to the given room as
+a system message.
+OPTIONS:
+  -h             Show help message
+  -m <message>   Message Text
+  -l <linkroom>  Link hooks of room slack
+  -c <color>     color of message only have Color RED,GREEN,YELLOW
+EOF
+}
+MESSAGE="TESTMESSAGE"
+while getopts 'hm:l:c:' OPTION; do
+    case $OPTION in
+      h) usage; exit 1;;
+      m) MESSAGE=$OPTARG;;
+      l) LINK=$OPTARG;;
+      c) COLOR=$OPTARG;;
+      ?) usage;exit 1;;
+    esac
+done
+
+if [ $MESSAGE == "TESTMESSAGE" ]; then
+    MESSAGE=$(cat)
+fi
+
+if [[ -z $MESSAGE ]] || [[ -z $LINK ]] || [[ -z $COLOR ]]; then
+ usage
+ exit 1
+fi
+
+if [[ $COLOR == 'GREEN' ]] || [[ $COLOR == 'green' ]]; then
+   code_color='#3aff00'
+elif [[ $COLOR == 'RED' ]] || [[ $COLOR == 'red' ]]; then
+   code_color='#ff002b'
+elif [[ $COLOR == 'YELLOW' ]] || [[ $COLOR == 'yellow' ]];then
+   code_color='#FDFD00'
+else
+   echo "$COLOR don't match"
+   exit
+fi
+
+
+str_message=$(cat <<EOF
+{"attachments":[{"text":"$MESSAGE","color":"$code_color"}]}
+EOF
+)
+curl -X POST -H 'Content-type: application/json' --data "$str_message"   $LINK
+
+You have mail in /var/spool/mail/root
