@@ -1,0 +1,69 @@
+- hosts: mysql, mysql_share
+  gather_facts: no
+  vars_files:
+#    - /opt/release/{{ DATE_DEPLOY }}/ansible-mysql/variables.yaml
+    - variables.yaml
+  tasks:
+  - name: Replicate Mysql Server
+    become: yes
+    become_user: root
+    block:
+    - name: Create SAT_CUSTOMER schema on dams-share server
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "CREATE DATABASE SAT_CUSTOMER;"
+      when:
+        - ansible_host == "{{ IP_SHARE001 }}" or ansible_host == "{{ IP_SHARE002 }}" 
+    - name: Get Position on dams002
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "SHOW MASTER STATUS \G;" | grep Position | awk -F ":" '{print $2}' |  sed 's/ //g'
+      register: Pos_dams002
+      delegate_to: dams002
+      when:
+        - ansible_host == "{{ IP_SHARE001 }}" or ansible_host == "{{ IP_SHARE002 }}"
+    - name: Get position on dams004
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "SHOW MASTER STATUS \G;" | grep Position | awk -F ":" '{print $2}' | sed 's/ //g'
+      register: Pos_dams004
+      delegate_to: dams004
+      when:
+        - ansible_host == "{{ IP_SHARE001 }}" or ansible_host == "{{ IP_SHARE002 }}"
+
+    - name: Get Binlog File on dams002
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "SHOW MASTER STATUS \G;" | grep File | awk -F ":" '{print $2}' | sed 's/ //g'
+      register: Binlog_dams002
+      delegate_to: dams002
+      when:
+        - ansible_host == "{{ IP_SHARE001 }}" or ansible_host == "{{ IP_SHARE002 }}"
+
+    - name: Get Binlog File on dams004
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "SHOW MASTER STATUS \G;" | grep File | awk -F ":" '{print $2}' | sed 's/ //g'
+      register: Binlog_dams004
+      delegate_to: dams004
+      when:
+        - ansible_host == "{{ IP_SHARE001 }}" or ansible_host == "{{ IP_SHARE002 }}"
+    
+    - name: Configure replicate from dams002 to dams-share001
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "CHANGE MASTER TO MASTER_HOST = '{{ IP_DAMS002 }}', MASTER_USER = '{{ MYSQL_REPLICATE_USER }}', MASTER_PASSWORD = '{{ MYSQL_REPLICATE_PASS }}', MASTER_LOG_FILE = '{{ Binlog_dams002.stdout }}', MASTER_LOG_POS = {{ Pos_dams002.stdout }} FOR CHANNEL 'master1';"
+      when: 
+        - ansible_host ==  "{{ IP_SHARE001 }}"
+
+    - name: Configure replicate from dams004 to dams-share001
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "CHANGE MASTER TO MASTER_HOST = '{{ IP_DAMS004 }}', MASTER_USER = '{{ MYSQL_REPLICATE_USER }}', MASTER_PASSWORD = '{{ MYSQL_REPLICATE_PASS }}', MASTER_LOG_FILE = '{{ Binlog_dams004.stdout }}', MASTER_LOG_POS = {{ Pos_dams004.stdout }} FOR CHANNEL 'master2';"
+      when:
+        - ansible_host ==  "{{ IP_SHARE001 }}"
+
+    - name: Configure replicate from dams002 to dams-share002 
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "CHANGE MASTER TO MASTER_HOST = '{{ IP_DAMS002 }}', MASTER_USER = '{{ MYSQL_REPLICATE_USER }}', MASTER_PASSWORD = '{{ MYSQL_REPLICATE_PASS }}', MASTER_LOG_FILE = '{{ Binlog_dams002.stdout }}', MASTER_LOG_POS = {{ Pos_dams002.stdout }} FOR CHANNEL 'master1';"
+      when:
+        - ansible_host ==  "{{ IP_SHARE002 }}"
+
+    - name: Configure replicate from dams004 to dams-share002
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "CHANGE MASTER TO MASTER_HOST = '{{ IP_DAMS004 }}', MASTER_USER = '{{ MYSQL_REPLICATE_USER }}', MASTER_PASSWORD = '{{ MYSQL_REPLICATE_PASS }}', MASTER_LOG_FILE = '{{ Binlog_dams004.stdout }}', MASTER_LOG_POS = {{ Pos_dams004.stdout }} FOR CHANNEL 'master2';"
+      when:
+        - ansible_host ==  "{{ IP_SHARE002 }}"
+
+    - name: Start slave on dams-share for channel-1
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "START SLAVE FOR CHANNEL 'master1';"
+      when: 
+        - inventory_hostname in groups["mysql_share"]
+    - name: Start slave on dams-share for channel-2
+      shell: /opt/mysql/bin/mysql -uroot -p{{ MYSQL_ROOT_PASSWORD }} -e "START SLAVE FOR CHANNEL 'master2';"
+      when:
+        - inventory_hostname in groups["mysql_share"]
