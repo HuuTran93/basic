@@ -1,0 +1,114 @@
+Install Mysql Note:
+
+cd /opt/
+scp -rp mbt-user@100.77.188.190:/home/mbt-user/mysql/mysql-8.0.15-linux-glibc2.12-x86_64.tar.xz ./
+tar -xvf mysql-8.0.15-linux-glibc2.12-x86_64.tar.xz
+mv mysql-8.0.15-linux-glibc2.12-x86_64 mysql
+groupadd mysql
+useradd -r -g mysql -s /bin/false mysql
+mkdir /opt/mysql/mysql-files
+mkdir /opt/mysql/data
+chown -R mysql:mysql /opt/mysql
+chmod -R 750 /opt/mysql/mysql-files/
+cp -rp /opt/mysql/support-files/mysql.server /etc/init.d/mysql
+vim /etc/my.cnf
+/opt/mysql/bin/mysqld --defaults-file=/etc/my.cnf  --initialize-insecure --user=mysql &
+service mysql start
+# vim ~/.bash_profile
+PATH=$PATH:$HOME/bin:/opt/mysql/bin
+source ~/.bash_profile
+mysql -uroot -p
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'ruVhqpYu4f';
+
+
+
+Install Replication note:
+dams001：100.77.196.10 - Master 1
+dams002：100.77.196.11 - Master 2
+dams003：100.77.196.12 - Slave
+
+
+CREATE USER 'replica'@'192.168.121.14' IDENTIFIED BY 'strong_password';
+
+Master 1
+SHOW MASTER STATUS; 
+create user 'ntareplicate1'@'10.0.%.%' identified by '123@123a'; 
+grant replication slave on *.* to 'ntareplicate'@'10.0.%.%'; 
+slave stop; 
+CHANGE MASTER TO MASTER_HOST = '100.77.196.11', MASTER_USER = 'rep_user', MASTER_PASSWORD = 'password', MASTER_LOG_FILE = 'mysql-bin.000012', MASTER_LOG_POS = 1028175201; 
+slave start; 
+
+Master 2
+SHOW MASTER STATUS; 
+create user 'ntareplicate'@'100.77.%.%' identified by 'password'; 
+grant replication slave on *.* to 'ntareplicate'@'100.77.%.%'; 
+slave stop; 
+CHANGE MASTER TO MASTER_HOST = '100.77.196.10', MASTER_USER = 'rep_user', MASTER_PASSWORD = 'password', MASTER_LOG_FILE = 'mysql-bin.000005', MASTER_LOG_POS = 151; 
+slave start; 
+SET GLOBAL read_only = ON;
+
+Slave
+
+CHANGE MASTER TO MASTER_HOST='10.0.0.8', MASTER_USER='ntareplicate69', MASTER_PORT=3306, MASTER_PASSWORD='123@123a', MASTER_LOG_FILE='mysql-bin.000013', MASTER_LOG_POS=599729 FOR CHANNEL 'master-1';
+
+CHANGE MASTER TO MASTER_HOST='10.0.0.9', MASTER_USER='ntareplicate69', MASTER_PORT=3306, MASTER_PASSWORD='123@123a', MASTER_LOG_FILE='mysql-bin.000012', MASTER_LOG_POS=918232756 FOR CHANNEL 'master-2';
+SET GLOBAL read_only = ON;
+SHOW GLOBAL VARIABLES LIKE '%read_only%';
+
+START SLAVE thread_types;
+or
+START SLAVE thread_types FOR CHANNEL channel;
+
+
+
+mysql> CREATE USER 'sat_service'@'%' IDENTIFIED BY 'pQAtBQ2VLp';
+mysql> GRANT ALL PRIVILEGES ON test_repl.* TO 'sat_service'@'%' WITH GRANT OPTION;
+
+
+
+Keepalive:
+yum -y install keepalived
+# create user can change read-only mode:
+CREATE USER 'failover_user'@'localhost' IDENTIFIED BY 'RQcPvH2fCw';
+GRANT SUPER ON *.* TO 'failover_user'@'localhost';
+
+vim /etc/mysql/config.cnf
+[client]
+user = failover_user
+password = RQcPvH2fCw
+host = localhost
+
+
+CREATE USER 'sat_service'@'100.77.%.%' IDENTIFIED BY 'F6qjGvun6P';
+GRANT USAGE ON *.* TO `sat_service`@`100.77.%.%`                                              
+GRANT ALL PRIVILEGES ON `SAT_BATCH`.* TO `sat_service`@`100.77.%.%` WITH GRANT OPTION;         
+GRANT ALL PRIVILEGES ON `SAT_COMMON`.* TO `sat_service`@`100.77.%.%` WITH GRANT OPTION;        
+GRANT ALL PRIVILEGES ON `SAT_COMPANY_WALLET`.* TO `sat_service`@`100.77.%.%` WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON `SAT_CUSTOMER`.* TO `sat_service`@`100.77.%.%` WITH GRANT OPTION;      
+GRANT ALL PRIVILEGES ON `SAT_HISTORY`.* TO `sat_service`@`100.77.%.%` WITH GRANT OPTION;       
+GRANT ALL PRIVILEGES ON `SAT_PAYMENT`.* TO `sat_service`@`100.77.%.%` WITH GRANT OPTION;       
+GRANT ALL PRIVILEGES ON `SAT_REG`.* TO `sat_service`@`100.77.%.%` WITH GRANT OPTION;           
+GRANT ALL PRIVILEGES ON `SAT_REPORT`.* TO `sat_service`@`100.77.%.%` WITH GRANT OPTION;  
+SHOW GRANTS FOR 'sat_service'@'100.77.%.%';
+
+SHOW GRANTS FOR 'sat_service'@'%';      
+
+------
+fail-back manual:
+- stop all system.
+- start Mysql on Master1, Check and sync data from Master2 (this step Master 1 is Backup DB)
+- restart keepalived on Master 1.
+- restart keepalived on Master 2.
+- restart mysql router on all serivce server.
+- Check again status.
+
+
+/opt/mysql/bin/mysqlbinlog --no-defaults  -R --protocol TCP  --host 100.77.189.196  --port 3306  --user root -p  mysql-bin.000012  > /tmp/data.sql
+ 
+ 
+ 
+ 
+
+
+
+ 
