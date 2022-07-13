@@ -1,0 +1,94 @@
+#!/bin/bash
+
+DAY=`date +%u`
+DATE=`date "+%Y%m%d"`
+mkdir -p /opt/sm_check_cve/$DATE
+RESULT="/opt/sm_check_cve/data/$DATE.txt"
+SOURCE="/opt/sm_check_cve/$DATE"
+
+get_cve () {
+cat /dev/null > $RESULT
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=mysql | grep -i "name=CVE" >  $SOURCE/MYSQL.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=jdk | grep -i "name=CVE" >  $SOURCE/JDK.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=redis | grep -i "name=CVE" >  $SOURCE/REDIS.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=activemq | grep -i "name=CVE" >  $SOURCE/ActiveMQ.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=nginx | grep -i "name=CVE" >  $SOURCE/NGINX.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=postfix | grep -i "name=CVE" >  $SOURCE/POSTFIX.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=Keepalive | grep -i "name=CVE" >  $SOURCE/KEEPALIVED.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=nfs | grep -i "name=CVE" > $SOURCE/NFS.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=Daemontools | grep -i "name=CVE" > $SOURCE/DAEMONTOOLS.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=Etcd | grep -i "name=CVE" > $SOURCE/ETCD.txt
+curl https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=opendkim | grep -i "name=CVE" > $SOURCE/OPENDKIM.txt
+}
+
+if [[ ${DAY} -gt 1 && ${DAY} -lt 6 ]]
+then
+      DATE2=`date -d '-1 day' '+%Y%m%d'`
+      SOURCE2="/opt/sm_check_cve/$DATE2/"
+      get_cve
+      LIST_CVE=`ls $SOURCE`
+  for x in $LIST_CVE
+     do
+        echo "Check CVE $x" >> $RESULT
+        cat $SOURCE/$x | wc -l >> $RESULT
+        DIFF=`diff -Eb $SOURCE2/$x $SOURCE/$x  | awk '{print $5}' | awk -F '=' '{print $3}' | awk -F '"' '{print $1}' | awk '{if(NR==2) print $0}'`
+        echo ${DIFF} &>/dev/null & >> $RESULT
+        DIFF2=`diff  $SOURCE/$x $SOURCE2/$x`
+      if [[ -z $DIFF2 ]]
+      then
+        SERVICE=`echo $x | awk -F '.' '{print $1}'`
+        message="$SERVICE CVE IS NOT CHANGED"
+str_message=$(cat <<EOF
+{"attachments":[{"text":"${message}","color":"#2EB67D"}]}
+EOF
+)
+        curl -H 'Content-type: application/json' --data "$str_message" -X POST https://hooks.slack.com/services/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
+        #echo "CVE for $x Is OK"
+        #curl -H "Content-type: application/json" --data '{"attachments":[{"text":"ALL CVE ARE NOT CHANGED","color":"#2EB67D"}]}' -X POST https://hooks.slack.com/services/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
+      else
+        SERVICE=`echo $x | awk -F '.' '{print $1}'`
+        message="[SM-AMS] PLEASE CHECK NEW ${DIFF} FOR $SERVICE WITH THIS LINK: https://docs.google.com/spreadsheets/d/1CiiDMHlSum5C2wcbINw7J9jfjvjWdl4EF8nVta9Hbb4/edit#gid=2043789820"
+str_message=$(cat <<EOF
+{"attachments":[{"text":"${message}","color":"#ff002b"}]}
+EOF
+)
+        #echo ${message}
+        curl -H 'Content-type: application/json' --data "$str_message" -X POST https://hooks.slack.com/services/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
+      fi
+  done
+elif [[ ${DAY}==1 ]]
+then
+       DATE3=`date -d '-3 day' '+%Y%m%d'`
+       SOURCE3="/opt/sm_check_cve/$DATE3/"
+       get_cve
+       LIST_CVE=`ls $SOURCE`
+   for x in $LIST_CVE
+      do
+         echo "Check CVE $x" >> $RESULT;
+         cat $SOURCE/$x | wc -l >> $RESULT;
+         DIFF=`diff -Eb $SOURCE3/$x $SOURCE/$x  | awk '{print $5}' | awk -F '=' '{print $3}' | awk -F '"' '{print $1}' | awk '{if(NR==2) print $0}'`
+         echo ${DIFF} &>/dev/null & >> $RESULT
+         DIFF3=`diff  $SOURCE/$x $SOURCE3/$x`
+      if [[ -z $DIFF3 ]]
+      then
+         SERVICE=`echo $x | awk -F '.' '{print $1}'`
+         message="$SERVICE CVE IS NOT CHANGED"
+str_message=$(cat <<EOF
+{"attachments":[{"text":"${message}","color":"#2EB67D"}]}
+EOF
+)
+         curl -H 'Content-type: application/json' --data "$str_message" -X POST https://hooks.slack.com/services/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
+         #echo "CVE for $x Is OK"
+         #curl -H "Content-type: application/json" --data '{"attachments":[{"text":"ALL CVE ARE NOT CHANGED","color":"#2EB67D"}]}' -X POST https://hooks.slack.com/services/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
+      else
+         SERVICE=`echo $x | awk -F '.' '{print $1}'`
+         message="[SM-AMS] PLEASE CHECK NEW ${DIFF} FOR $SERVICE WITH THIS LINK: https://docs.google.com/spreadsheets/d/1CiiDMHlSum5C2wcbINw7J9jfjvjWdl4EF8nVta9Hbb4/edit#gid=2043789820"
+str_message=$(cat <<EOF
+{"attachments":[{"text":"${message}","color":"#ff002b"}]}
+EOF
+)
+         #echo ${message}
+         curl -H 'Content-type: application/json' --data "$str_message" -X POST https://hooks.slack.com/services/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
+      fi
+   done
+fi
