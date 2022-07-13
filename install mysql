@@ -1,0 +1,97 @@
+hosts: mysql_share
+  gather_facts: no
+  vars_files:
+#    - /opt/release/{{ DATE_DEPLOY }}/ansible-mysql/variables.yaml
+    - variables.yaml
+  tasks:
+  - name: Install  mysql-share version {{ MYSQL_VERSION }}
+    become: yes
+    become_user: root
+    block:
+    - name: Create mysql group on database servers
+      group:
+        name: mysql
+        state: present
+    - name: Create mysql user on database servers
+      user:
+        name: mysql
+        group: mysql
+        system: yes
+        shell: /bin/false
+    - name: Decompress source to mysql-share database servers
+      unarchive:
+        remote_src: no
+        src: "{{ MYSQL_SOURCE_FILES }}/{{ MYSQL_VERSION }}.tar.xz"
+        dest: /opt/
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Create mysql soft link
+      file:
+        src: "{{ MYSQL_VERSION }}"
+        path: "{{ MYSQL_BASE_DIR }}"
+        state: link
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Create secrets directory to store keyring file
+      file:
+        path: "{{ MYSQL_SECRETS_DIR }}"
+        state: directory
+        owner: mysql
+        group: mysql
+        mode: '0755'
+    - name: Copy keyring file to DB Share server
+      copy:
+        src: "{{ MYSQL_SOURCE_FILES }}/keyring"
+        dest: "{{ MYSQL_SECRETS_DIR }}/keyring"
+        force: yes
+        owner: mysql
+        group: mysql
+        mode: '0644'
+        remote_src: no
+    - name: Copy config temporary to initialize mysql for Share001111111111
+      template:
+        src: "{{ MYSQL_SOURCE_FILES }}/share001_tmp.j2"
+        dest: /etc/my.cnf
+        mode: '0644'
+      when:
+      - ansible_host ==  "{{ IP_SHARE001 }}"
+    - name: Copy config temporary to initialize mysql for Share00222222222
+      template:
+        src: "{{ MYSQL_SOURCE_FILES }}/share002_tmp.j2"
+        dest: /etc/my.cnf
+        mode: '0644'
+      when:
+      - ansible_host ==  "{{ IP_SHARE002 }}"
+    - name: Initialization mysql data
+      command:
+        cmd: "{{ MYSQL_BASE_DIR }}/bin/mysqld --defaults-file=/etc/my.cnf --initialize-insecure --user=mysql"
+      ignore_errors: true
+    - name: Update Standard config after initialize mysql for Share00111111111
+      template:
+        src: "{{ MYSQL_SOURCE_FILES }}/share001.j2"
+        dest: /etc/my.cnf
+        mode: '0644'
+      when:
+      - ansible_host ==  "{{ IP_SHARE001 }}"
+    - name: Update Standard config after initialize mysql for Share0022222222
+      template:
+        src: "{{ MYSQL_SOURCE_FILES }}/share002.j2"
+        dest: /etc/my.cnf
+        mode: '0644'
+      when:
+      - ansible_host ==  "{{ IP_SHARE002 }}"
+    - name: Copy script file start,stop mysql
+      copy:
+        src: "{{ MYSQL_BASE_DIR }}/support-files/mysql.server"
+        dest: /etc/init.d/mysql
+        remote_src: yes
+        mode: '0755'
+        force: yes
+    - name: Change password user root and Restart mysql
+      shell: "{{ item }}"
+      with_items:
+        - service mysql start
+        - /opt/mysql/bin/mysql -uroot -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '{{ MYSQL_ROOT_PASSWORD }}';"
+        - /etc/init.d/mysql restart
